@@ -1,0 +1,179 @@
+<div class="universe-page">
+  @if (message()) {
+    <div class="action-toast" style="padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--color-blue); color: var(--color-blue); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+      <span>{{ message() }}</span>
+      <button class="btn btn-sm btn-secondary" (click)="message.set('')">Dismiss</button>
+    </div>
+  }
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="card">
+      <span class="metric-label">Tracked Universe</span>
+      <div class="metric-val text-blue">{{ totalCount() }} Stocks</div>
+    </div>
+    <div class="card">
+      <span class="metric-label">Cached Candles</span>
+      <div class="metric-val text-amber">{{ dataStats()?.total_candles | number }}</div>
+    </div>
+    <div class="card">
+      <span class="metric-label">Date Range</span>
+      <div class="metric-val mono" style="font-size: 14px;">
+        {{ dataStats()?.min_date || 'N/A' }} → {{ dataStats()?.max_date || 'N/A' }}
+      </div>
+    </div>
+    <div class="card">
+      <span class="metric-label">Eligible for Screener (>250 bars)</span>
+      <div class="metric-val text-green">{{ dataStats()?.symbols_with_enough_history || 0 }} Symbols</div>
+    </div>
+  </div>
+
+  <!-- Preflight Result Card if available -->
+  @if (preflightResult(); as pf) {
+    <div class="card" style="border-color: var(--color-blue);">
+      <div class="card-header">
+        <span class="card-title">Preflight Diagnostic Report</span>
+        <span class="badge" [ngClass]="pf.preflight_passed ? 'badge-green' : 'badge-amber'">
+          {{ pf.preflight_passed ? 'ALL CHECKS PASSED' : 'CHECK WARNINGS' }}
+        </span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 13px;">
+        <div><strong>Broker Mode:</strong> {{ pf.broker_mode }}</div>
+        <div><strong>Benchmark Ready:</strong> {{ pf.benchmark_status ? 'YES' : 'MISSING' }}</div>
+        <div><strong>Valid Equities:</strong> {{ pf.valid_symbols_count }}</div>
+        <div><strong>ASM/GSM Filtered:</strong> {{ pf.asm_gsm_excluded_count || 0 }}</div>
+      </div>
+    </div>
+  }
+
+  <!-- Live Universe / Data Task Progress Box -->
+  @if (activeTask(); as task) {
+    @if (task.status === 'RUNNING' || task.status === 'IDLE' || task.status === 'PAUSED') {
+      <div class="card" style="border-left: 3px solid var(--color-blue); background: linear-gradient(90deg, #101722, #161f2e);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="task-pulse-dot"></span>
+            <span class="bold" style="color: var(--text-primary);">{{ task.task_type }} Active</span>
+            <span class="mono text-secondary" style="font-size: 11px;">#{{ task.task_id || task.id }}</span>
+            <span class="badge badge-amber mono bold">{{ task.stage || 'Processing...' }}</span>
+            @if (task.current_item) {
+              <span class="ticker-pill mono">{{ task.current_item }}</span>
+            }
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="mono text-blue bold" style="font-size: 13px;">{{ task.progress_pct | number:'1.1-1' }}% overall</span>
+            <a routerLink="/tasks" class="btn btn-sm btn-secondary">Tasks & Live Logs &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Stage Stepper -->
+        <div class="stage-pipeline" style="margin: 6px 0;">
+          @for (st of getTaskStages(); track st.id) {
+            <div class="stage-step" [ngClass]="st.status">
+              <span class="stage-step-num">{{ st.id }}</span>
+              <span class="stage-step-label">{{ st.label }}</span>
+              @if (st.status === 'completed') {
+                <span class="stage-icon-done">✓</span>
+              }
+              @if (st.status === 'active') {
+                <span class="stage-pulse-dot"></span>
+              }
+            </div>
+            @if (!$last) {
+              <span class="stage-separator" [class.active]="st.status === 'completed'">&rarr;</span>
+            }
+          }
+        </div>
+
+        <!-- Progress Track & Message -->
+        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px;">
+          <span class="text-secondary">{{ task.message || task.current_step }}</span>
+          @if (task.stage_progress_pct !== undefined) {
+            <span class="mono text-secondary">Stage Progress: {{ task.completed_steps || task.completed_items || 0 }}/{{ task.total_steps || task.total_items || 0 }} ({{ task.stage_progress_pct | number:'1.0-0' }}%)</span>
+          }
+        </div>
+        <div class="progress-track" style="margin-top: 4px;">
+          <div class="progress-bar" [style.width.%]="task.progress_pct"></div>
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Controls Bar -->
+  <div class="card" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;">
+    <div style="display: flex; gap: 8px; flex: 1; min-width: 260px;">
+      <input type="text" [(ngModel)]="search" (keyup.enter)="onSearch()" placeholder="Search symbol or name..." style="max-width: 250px;" />
+      <button class="btn btn-secondary" (click)="onSearch()">Search</button>
+    </div>
+
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-secondary" (click)="runPreflight()">Run Preflight</button>
+      <button class="btn btn-secondary" (click)="rebuildUniverse()">Rebuild Universe</button>
+      <button class="btn btn-primary" (click)="triggerBackfill()">Backfill 400D Candles</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Universe Constituents</span>
+      <span class="text-secondary" style="font-size: 12px;">Page {{ page() }} of {{ (totalCount() / pageSize()) | number:'1.0-0' }}</span>
+    </div>
+
+    @if (loading()) {
+      <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+        Loading universe constituents...
+      </div>
+    } @else if (instruments().length === 0) {
+      <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+        No symbols found. Click "Rebuild Universe" to fetch the latest SmallCap 250 universe.
+      </div>
+    } @else {
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Name</th>
+              <th>Lot Size</th>
+              <th>Tick Size</th>
+              <th>Status</th>
+              <th>ASM/GSM Filter</th>
+              <th>Last Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (inst of instruments(); track inst.symbol) {
+              <tr>
+                <td class="bold mono">{{ inst.symbol }}</td>
+                <td>{{ inst.name || inst.symbol }}</td>
+                <td class="mono">{{ inst.lot_size || 1 }}</td>
+                <td class="mono">{{ inst.tick_size || 0.05 }}</td>
+                <td>
+                  <span class="badge" [ngClass]="inst.is_active ? 'badge-green' : 'badge-neutral'">
+                    {{ inst.is_active ? 'ACTIVE' : 'INACTIVE' }}
+                  </span>
+                </td>
+                <td>
+                  <span class="badge" [ngClass]="inst.is_asm_gsm ? 'badge-red' : 'badge-green'">
+                    {{ inst.is_asm_gsm ? 'EXCLUDED' : 'CLEAN' }}
+                  </span>
+                </td>
+                <td class="mono text-secondary" style="font-size: 11px;">{{ inst.updated_at }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination-bar" style="margin-top: 12px;">
+        <span class="text-secondary" style="font-size: 13px;">Showing {{ instruments().length }} of {{ totalCount() }} items</span>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-sm btn-secondary" [disabled]="page() <= 1" (click)="prevPage()">Previous</button>
+          <button class="btn btn-sm btn-secondary" [disabled]="page() * pageSize() >= totalCount()" (click)="nextPage()">Next</button>
+        </div>
+      </div>
+    }
+  </div>
+</div>

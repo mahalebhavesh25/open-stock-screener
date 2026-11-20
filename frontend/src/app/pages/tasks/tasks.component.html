@@ -1,0 +1,165 @@
+<div class="tasks-page">
+  @if (message()) {
+    <div class="action-toast">
+      <span>{{ message() }}</span>
+      <button class="btn btn-sm btn-secondary" (click)="message.set('')">Dismiss</button>
+    </div>
+  }
+
+  <!-- Active & Historical Tasks -->
+  <div class="card">
+    <div class="card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="card-title">Background Job Queue & Multi-Stage Pipelines</span>
+        <span class="badge badge-neutral">{{ tasks().length }} tasks</span>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-sm btn-secondary" title="Remove all completed, cancelled, or failed tasks" (click)="clearFinishedTasks()">Clear Finished</button>
+        <button class="btn btn-sm btn-secondary" (click)="loadTasks()">Refresh</button>
+      </div>
+    </div>
+
+    @if (tasks().length === 0) {
+      <div style="padding: 30px; text-align: center; color: var(--text-secondary);">
+        No background tasks registered yet. Multi-stage tasks (Universe Rebuild, Screener Scan, Data Backfill, Backtest) will appear here with live stage progress.
+      </div>
+    } @else {
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        @for (t of tasks(); track t.task_id || t.id) {
+          <div class="task-card">
+            <!-- Header Row -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span class="mono bold" style="font-size: 14px; color: var(--text-primary);">{{ t.task_type }}</span>
+                <span class="mono text-secondary" style="font-size: 11px;">#{{ t.task_id || t.id }}</span>
+                <span class="badge" [ngClass]="{
+                  'badge-green': t.status === 'COMPLETED',
+                  'badge-blue': t.status === 'RUNNING',
+                  'badge-amber': t.status === 'PAUSED' || t.status === 'PENDING',
+                  'badge-red': t.status === 'FAILED' || t.status === 'CANCELLED'
+                }">
+                  {{ t.status }}
+                </span>
+                @if (t.stage) {
+                  <span class="badge badge-amber mono bold">{{ t.stage }}</span>
+                }
+                @if (t.current_item) {
+                  <span class="ticker-pill mono">{{ t.current_item }}</span>
+                }
+              </div>
+
+              <!-- Resumability Controls -->
+              <div style="display: flex; gap: 6px;">
+                @if (t.status === 'RUNNING') {
+                  <button class="btn btn-sm btn-secondary" (click)="pause(t)">Pause</button>
+                }
+                @if (t.status === 'PAUSED') {
+                  <button class="btn btn-sm btn-primary" (click)="resume(t)">Resume</button>
+                }
+                @if (t.status === 'RUNNING' || t.status === 'PAUSED' || t.status === 'PENDING') {
+                  <button class="btn btn-sm btn-danger" (click)="cancel(t)">Cancel</button>
+                }
+                @if (t.status === 'COMPLETED' || t.status === 'CANCELLED' || t.status === 'FAILED' || t.status === 'IDLE') {
+                  <button class="btn btn-sm btn-secondary" style="color: var(--text-secondary);" title="Remove from list" (click)="deleteTask(t)">Clear</button>
+                }
+              </div>
+            </div>
+
+            <!-- Multi-Stage Visual Pipeline Stepper -->
+            <div class="stage-pipeline">
+              @for (st of getTaskStages(t); track st.id) {
+                <div class="stage-step" [ngClass]="st.status">
+                  <span class="stage-step-num">{{ st.id }}</span>
+                  <span class="stage-step-label">{{ st.label }}</span>
+                  @if (st.status === 'completed') {
+                    <span class="stage-icon-done">✓</span>
+                  }
+                  @if (st.status === 'active') {
+                    <span class="stage-pulse-dot"></span>
+                  }
+                </div>
+                @if (!$last) {
+                  <span class="stage-separator" [class.active]="st.status === 'completed'">&rarr;</span>
+                }
+              }
+            </div>
+
+            <!-- Progress Bar & Details -->
+            <div style="margin-top: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                <span class="text-secondary">{{ t.message || t.current_step || 'Processing...' }}</span>
+                <div style="display: flex; gap: 8px;">
+                  @if (t.stage_progress_pct !== undefined) {
+                    <span class="mono text-secondary">Stage: {{ t.completed_steps || t.completed_items || 0 }}/{{ t.total_steps || t.total_items || 0 }} ({{ t.stage_progress_pct | number:'1.0-0' }}%)</span>
+                  }
+                  <span class="mono text-blue bold">Overall: {{ t.progress_pct | number:'1.1-1' }}%</span>
+                </div>
+              </div>
+              <div class="progress-track">
+                <div class="progress-bar" [style.width.%]="t.progress_pct"></div>
+              </div>
+            </div>
+
+            @if (t.error_message || t.error) {
+              <div style="margin-top: 8px; font-size: 12px; color: var(--color-red);">
+                Error: {{ t.error_message || t.error }}
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Real-Time SSE Streaming Logs Console -->
+  <div class="card">
+    <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="card-title">Live Application & Engine Log Stream</span>
+        <span class="badge badge-green">LIVE SSE</span>
+        <span class="mono text-secondary" style="font-size: 11px;">{{ filteredLogs().length }} / {{ logs().length }} events</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <!-- Level Filter Dropdown -->
+        <select class="input-filter-select" [ngModel]="logLevel()" (ngModelChange)="logLevel.set($event)">
+          <option value="ALL">All Levels</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+          <option value="DEBUG">DEBUG</option>
+        </select>
+
+        <!-- Search Input -->
+        <input
+          type="text"
+          class="input-filter-text"
+          placeholder="Filter logs (e.g. stage, symbol)..."
+          [ngModel]="logFilter()"
+          (ngModelChange)="logFilter.set($event)"
+        />
+
+        <button class="btn btn-sm btn-secondary" (click)="autoScroll.set(!autoScroll())">
+          {{ autoScroll() ? 'Auto-Scroll ON' : 'Auto-Scroll OFF' }}
+        </button>
+        <button class="btn btn-sm btn-secondary" (click)="clearLogs()">Clear</button>
+      </div>
+    </div>
+
+    <div id="log-console-box" class="log-console">
+      @if (filteredLogs().length === 0) {
+        <div style="color: var(--text-muted); text-align: center; padding: 20px;">
+          Listening to live engine log stream... Output from all background stages and engine services will appear here in real time.
+        </div>
+      }
+      @for (entry of filteredLogs(); track $index) {
+        <div class="log-entry-row">
+          <span class="log-entry-time mono">{{ entry.timestamp || '--:--:--' }}</span>
+          <span class="log-entry-lvl" [ngClass]="'lvl-' + entry.level.toLowerCase()">{{ entry.level }}</span>
+          <span class="log-entry-src mono">[{{ entry.source }}]</span>
+          <span class="log-entry-msg">{{ entry.message }}</span>
+        </div>
+      }
+    </div>
+  </div>
+</div>

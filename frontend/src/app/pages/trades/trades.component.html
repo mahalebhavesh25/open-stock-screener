@@ -1,0 +1,272 @@
+<div class="trades-page">
+  @if (message()) {
+    <div class="action-toast" style="padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--color-blue); color: var(--color-blue); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+      <span>{{ message() }}</span>
+      <button class="btn btn-sm btn-secondary" (click)="message.set('')">Dismiss</button>
+    </div>
+  }
+
+  <!-- KPI Summary Header -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+    <div class="card">
+      <span class="metric-label">Total Realized PnL</span>
+      <div class="metric-val" [ngClass]="totalRealizedPnL() >= 0 ? 'text-green' : 'text-red'">
+        ₹{{ totalRealizedPnL() | number:'1.2-2' }}
+      </div>
+    </div>
+    <div class="card">
+      <span class="metric-label">Historical Win Rate</span>
+      <div class="metric-val text-blue">
+        {{ winRate() | number:'1.1-1' }}%
+      </div>
+    </div>
+    <div class="card">
+      <span class="metric-label">Win / Loss Ratio</span>
+      <div class="metric-val">
+        <span class="text-green">{{ winCount() }}W</span> / <span class="text-red">{{ lossCount() }}L</span>
+      </div>
+    </div>
+    <div class="card">
+      <span class="metric-label">Active Positions</span>
+      <div class="metric-val text-amber">
+        {{ openTrades().length }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs Navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn" [class.active]="activeTab() === 'OPEN'" (click)="activeTab.set('OPEN')">
+      Open Positions
+      <span class="badge badge-green">{{ openTrades().length }}</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab() === 'PROPOSED'" (click)="activeTab.set('PROPOSED')">
+      Proposed & Approvals
+      <span class="badge badge-amber">{{ proposedTrades().length }}</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab() === 'ORDERS'" (click)="activeTab.set('ORDERS')">
+      Broker Orders
+      <span class="badge badge-neutral">{{ orders().length }}</span>
+    </button>
+    <button class="tab-btn" [class.active]="activeTab() === 'HISTORY'" (click)="activeTab.set('HISTORY')">
+      Trade History
+      <span class="badge badge-blue">{{ tradeHistory().length }}</span>
+    </button>
+    <button class="btn btn-sm btn-secondary" style="margin-left: auto;" (click)="refreshAll()">
+      Refresh
+    </button>
+  </div>
+
+  <!-- Tab 1: Open Positions -->
+  @if (activeTab() === 'OPEN') {
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Active Portfolio Positions</span>
+        <span class="text-secondary" style="font-size: 12px;">Dynamic trailing stops and multi-stage scaling</span>
+      </div>
+
+      @if (openTrades().length === 0) {
+        <div style="padding: 30px; text-align: center; color: var(--text-secondary);">
+          No open positions currently active.
+        </div>
+      } @else {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Strategy</th>
+                <th>Qty</th>
+                <th>Avg Entry</th>
+                <th>Stop Loss</th>
+                <th>Target 1</th>
+                <th>Target 2</th>
+                <th>T1 Hit</th>
+                <th>State</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (t of openTrades(); track t.trade_id) {
+                <tr>
+                  <td class="bold mono">{{ t.symbol }}</td>
+                  <td><span class="badge badge-blue">{{ t.strategy }}</span></td>
+                  <td class="mono">{{ t.open_qty }}</td>
+                  <td class="mono">₹{{ t.avg_entry | number:'1.2-2' }}</td>
+                  <td class="mono text-red">₹{{ t.stop_loss | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ t.target_1 | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ t.target_2 | number:'1.2-2' }}</td>
+                  <td>
+                    <span class="badge" [ngClass]="t.target_1_hit ? 'badge-green' : 'badge-neutral'">
+                      {{ t.target_1_hit ? 'SCALED 50%' : 'PENDING' }}
+                    </span>
+                  </td>
+                  <td><span class="badge badge-green">{{ t.state }}</span></td>
+                  <td>
+                    <button class="btn btn-sm btn-danger" (click)="closePosition(t)">Close</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Tab 2: Proposed Trades -->
+  @if (activeTab() === 'PROPOSED') {
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Pending Human Approval Queue</span>
+        <span class="text-secondary" style="font-size: 12px;">All trade signals require explicit user sign-off</span>
+      </div>
+
+      @if (proposedTrades().length === 0) {
+        <div style="padding: 30px; text-align: center; color: var(--text-secondary);">
+          Queue is empty. No trades waiting for approval.
+        </div>
+      } @else {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Strategy</th>
+                <th>Composite Score</th>
+                <th>Planned Entry</th>
+                <th>Stop Loss</th>
+                <th>Target 1</th>
+                <th>Target 2</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of proposedTrades(); track p.trade_id || p.signal_id) {
+                <tr>
+                  <td class="bold mono">{{ p.symbol }}</td>
+                  <td><span class="badge badge-blue">{{ p.strategy }}</span></td>
+                  <td class="mono bold text-green">{{ p.score | number:'1.1-1' }}</td>
+                  <td class="mono">₹{{ p.entry_price | number:'1.2-2' }}</td>
+                  <td class="mono text-red">₹{{ p.stop_loss | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ p.target_1 | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ p.target_2 | number:'1.2-2' }}</td>
+                  <td style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-primary" (click)="approve(p)">Approve</button>
+                    <button class="btn btn-sm btn-danger" (click)="reject(p)">Reject</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Tab 3: Broker Orders -->
+  @if (activeTab() === 'ORDERS') {
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Broker Order Submissions</span>
+        <span class="text-secondary" style="font-size: 12px;">Audit trail of working & filled orders</span>
+      </div>
+
+      @if (orders().length === 0) {
+        <div style="padding: 30px; text-align: center; color: var(--text-secondary);">
+          No broker orders recorded yet.
+        </div>
+      } @else {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Symbol</th>
+                <th>Side</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Fill Price</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (o of orders(); track o.order_id) {
+                <tr>
+                  <td class="mono text-secondary" style="font-size: 11px;">{{ o.order_id }}</td>
+                  <td class="bold mono">{{ o.symbol }}</td>
+                  <td>
+                    <span class="badge" [ngClass]="o.side === 'BUY' ? 'badge-green' : 'badge-red'">{{ o.side }}</span>
+                  </td>
+                  <td class="mono">{{ o.qty }}</td>
+                  <td class="mono">₹{{ o.price | number:'1.2-2' }}</td>
+                  <td class="mono">₹{{ o.avg_fill_price | number:'1.2-2' }}</td>
+                  <td><span class="badge badge-neutral">{{ o.status }}</span></td>
+                  <td class="mono text-secondary" style="font-size: 11px;">{{ o.placed_at }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Tab 4: Trade History -->
+  @if (activeTab() === 'HISTORY') {
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Completed Trades Log</span>
+        <span class="text-secondary" style="font-size: 12px;">Closed positions with exit attribution</span>
+      </div>
+
+      @if (tradeHistory().length === 0) {
+        <div style="padding: 30px; text-align: center; color: var(--text-secondary);">
+          No historical trades closed yet.
+        </div>
+      } @else {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Strategy</th>
+                <th>Entry Price</th>
+                <th>Exit Price</th>
+                <th>Exit Reason</th>
+                <th>Realized PnL</th>
+                <th>Holding Days</th>
+                <th>Exit Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (h of tradeHistory(); track h.trade_id) {
+                <tr>
+                  <td class="bold mono">{{ h.symbol }}</td>
+                  <td><span class="badge badge-blue">{{ h.strategy }}</span></td>
+                  <td class="mono">₹{{ h.entry_price | number:'1.2-2' }}</td>
+                  <td class="mono">₹{{ h.exit_price | number:'1.2-2' }}</td>
+                  <td>
+                    <span class="badge" [ngClass]="{
+                      'badge-red': h.exit_reason === 'STOP_LOSS' || h.exit_reason === 'REGIME_KILL',
+                      'badge-green': h.exit_reason === 'TARGET_1' || h.exit_reason === 'TARGET_2' || h.exit_reason === 'TRAILING_STOP',
+                      'badge-amber': h.exit_reason === 'TIME_STOP'
+                    }">
+                      {{ h.exit_reason }}
+                    </span>
+                  </td>
+                  <td class="mono bold" [ngClass]="h.realized_pnl >= 0 ? 'text-green' : 'text-red'">
+                    ₹{{ h.realized_pnl | number:'1.2-2' }}
+                  </td>
+                  <td class="mono">{{ h.holding_days || 0 }}d</td>
+                  <td class="mono text-secondary" style="font-size: 11px;">{{ h.exit_time }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+</div>
