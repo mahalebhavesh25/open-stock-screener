@@ -1,0 +1,325 @@
+<div class="settings-page">
+  @if (message()) {
+    <div class="action-toast" style="padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--color-blue); color: var(--color-blue); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+      <span>{{ message() }}</span>
+      <button class="btn btn-sm btn-secondary" (click)="message.set('')">Dismiss</button>
+    </div>
+  }
+
+  <!-- Header Actions -->
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <h2 style="font-size: 20px; font-weight: 700;">Engine Settings & Configuration</h2>
+      <p style="color: var(--text-secondary); font-size: 13px;">Manage execution mode, risk limits, strategy weights, and API credentials.</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button class="btn btn-secondary" (click)="resetDefaults()">Reset Defaults</button>
+      <button class="btn btn-primary" (click)="saveSettings()" [disabled]="saving()">
+        {{ saving() ? 'Saving...' : 'Save Changes' }}
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+      Loading engine configuration...
+    </div>
+  } @else {
+    <!-- 1. Execution & Environment -->
+    <div class="card settings-section">
+      <div class="card-header">
+        <span class="card-title">1. Execution Mode & Safeguards</span>
+        <span class="badge badge-neutral">Core Engine</span>
+      </div>
+
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Run Mode</label>
+          <select [(ngModel)]="cfg.run_mode">
+            <option value="RESEARCH">RESEARCH (Historical Research &amp; Backtesting - Offline)</option>
+            <option value="LIVE">LIVE (Groww API, Execution Engine, LLM &amp; Alerts)</option>
+            <option value="SMOKE">SMOKE (Fast Synthetic Tape Test - 24 Symbols)</option>
+          </select>
+          <span class="setting-hint">Top-level engine operational posture from original notebook</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Broker Adapter</label>
+          <select [(ngModel)]="cfg.mode">
+            <option value="PAPER">PAPER (Zero Risk Virtual Broker)</option>
+            <option value="GROWW">GROWW (Groww API Direct Broker)</option>
+          </select>
+          <span class="setting-hint">Brokerage backend adapter</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Dry Run Guard</label>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+            <input type="checkbox" [(ngModel)]="cfg.dry_run" style="width: auto;" id="dryrun" />
+            <label for="dryrun" style="font-size: 13px; text-transform: none;">Dry Run Active (Prevents live order transmission)</label>
+          </div>
+          <span class="setting-hint">Recommended enabled at all times during paper evaluation</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Execution Delay (Seconds)</label>
+          <input type="number" [(ngModel)]="cfg.execution_delay_secs" />
+          <span class="setting-hint">Human window to review/vet signals</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Capital & Risk Management -->
+    <div class="card settings-section">
+      <div class="card-header">
+        <span class="card-title">2. Capital Allocation & Risk Management</span>
+        <span class="badge badge-amber">Capital Preservation</span>
+      </div>
+
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Initial Capital (₹)</label>
+          <input type="number" [(ngModel)]="cfg.initial_capital" />
+          <span class="setting-hint">Portfolio base capital in INR</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Risk Per Trade (%)</label>
+          <input type="number" step="0.001" [(ngModel)]="cfg.risk_per_trade_pct" />
+          <span class="setting-hint">0.0075 = 0.75% max risk per trade</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Max Open Positions</label>
+          <input type="number" [(ngModel)]="cfg.max_open_positions" />
+          <span class="setting-hint">Max concurrent swing trades (default: 8)</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Max Portfolio Risk (%)</label>
+          <input type="number" step="0.01" [(ngModel)]="cfg.max_portfolio_risk_pct" />
+          <span class="setting-hint">0.06 = 6.0% cumulative open risk cap</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Max Sector Exposure (%)</label>
+          <input type="number" step="0.01" [(ngModel)]="cfg.max_sector_exposure_pct" />
+          <span class="setting-hint">0.20 = 20% max concentration in one sector</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Daily Loss Limit (%)</label>
+          <input type="number" step="0.01" [(ngModel)]="cfg.daily_loss_limit_pct" />
+          <span class="setting-hint">0.02 = 2.0% daily circuit breaker cutoff</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Targets & Exit Rules -->
+    <div class="card settings-section">
+      <div class="card-header">
+        <span class="card-title">3. Profit Targets & Stop Loss Sizing</span>
+        <span class="badge badge-blue">Trade Planning</span>
+      </div>
+
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Target 1 R-Multiple</label>
+          <input type="number" step="0.1" [(ngModel)]="cfg.t1_target_r" />
+          <span class="setting-hint">1.5R = Scale out 50% and move stop to Breakeven</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Target 2 R-Multiple</label>
+          <input type="number" step="0.1" [(ngModel)]="cfg.t2_target_r" />
+          <span class="setting-hint">3.0R = Scale out remainder or activate Chandelier trail</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Hard Stop Loss (%)</label>
+          <input type="number" step="0.01" [(ngModel)]="cfg.hard_stop_loss_pct" />
+          <span class="setting-hint">0.08 = 8.0% absolute maximum stop loss distance</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Min Reward-to-Risk Ratio</label>
+          <input type="number" step="0.1" [(ngModel)]="cfg.min_reward_risk_ratio" />
+          <span class="setting-hint">Minimum 2.0 R:R required to generate signal</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Regime Filter & Universe Filters -->
+    <div class="card settings-section">
+      <div class="card-header">
+        <span class="card-title">4. Market Regime & Universe Filters</span>
+        <span class="badge badge-green">Macro & Liquidity Gates</span>
+      </div>
+
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>Market Regime Filter</label>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+            <input type="checkbox" [(ngModel)]="cfg.regime_filter_enabled" style="width: auto;" id="regimeon" />
+            <label for="regimeon" style="font-size: 13px; text-transform: none;">Enable SmallCap 250 Regime Exposure Dial</label>
+          </div>
+          <span class="setting-hint">Scales position size (0.35x - 1.0x) based on market health</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Universe Size</label>
+          <input type="number" [(ngModel)]="cfg.universe_size" />
+          <span class="setting-hint">Target small-cap equity universe count (default: 250)</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Min Daily Turnover (₹ Crores)</label>
+          <input type="number" step="0.1" [(ngModel)]="cfg.min_daily_turnover_cr" />
+          <span class="setting-hint">Exclude illiquid stocks below ₹1.0 Cr 20D ADV</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Lookback Bars Required</label>
+          <input type="number" [(ngModel)]="cfg.lookback_bars_required" />
+          <span class="setting-hint">Minimum historical daily candles needed (default: 250)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Strategy Weights & Scoring -->
+    <div class="card settings-section">
+      <div class="card-header">
+        <span class="card-title">5. Strategy Weights & Composite Scoring</span>
+        <span class="badge badge-purple">Quant Ranking</span>
+      </div>
+
+      <div class="settings-grid">
+        <div class="setting-item">
+          <label>VCP Breakout Weight</label>
+          <input type="number" step="0.05" [(ngModel)]="cfg.weight_vcp" />
+          <span class="setting-hint">Weight for Volatility Contraction Pattern (0.35)</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Trend Pullback Weight</label>
+          <input type="number" step="0.05" [(ngModel)]="cfg.weight_trend" />
+          <span class="setting-hint">Weight for Trend Pullback to 20/50 SMA (0.30)</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Mean Reversion Weight</label>
+          <input type="number" step="0.05" [(ngModel)]="cfg.weight_revert" />
+          <span class="setting-hint">Weight for Oversold Mean Reversion (0.20)</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Donchian 55-Day Weight</label>
+          <input type="number" step="0.05" [(ngModel)]="cfg.weight_donchian" />
+          <span class="setting-hint">Weight for Turtle 55-Day Channel Breakout (0.15)</span>
+        </div>
+
+        <div class="setting-item">
+          <label>Min Composite Score</label>
+          <input type="number" step="1" [(ngModel)]="cfg.min_composite_score" />
+          <span class="setting-hint">Minimum score (0-100) to qualify as a signal (default: 55)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Integrations & Credentials -->
+    <div class="card settings-section">
+      <div class="card-header">
+        <span class="card-title">6. External Integrations & API Credentials</span>
+        <span class="badge badge-blue">Connectivity</span>
+      </div>
+
+      <!-- Groww API -->
+      <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">Groww API Brokerage</div>
+
+        <!-- Groww Access Token with Redirection Link -->
+        <div class="setting-item" style="margin-bottom: 12px;">
+          <label>Groww Access Token (JWT)</label>
+          <textarea rows="3" [(ngModel)]="cfg.groww_access_token" placeholder="Paste your Groww Daily Access Token here..."></textarea>
+          <div style="margin-top: 6px;">
+            <a href="https://groww.in/trade-api/api-keys" target="_blank" rel="noopener noreferrer" style="color: var(--color-blue); text-decoration: underline; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+              🔗 Click here to generate / view your Groww API Keys and Access Token (https://groww.in/trade-api/api-keys) &rarr;
+            </a>
+          </div>
+          <span class="setting-hint">Groww access tokens expire daily around 06:00 IST. If provided, the engine connects instantly without needing TOTP.</span>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase;">Or Automatic Auth via API Key + Secret + TOTP:</div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>API Key</label>
+            <input type="password" [(ngModel)]="cfg.groww_api_key" placeholder="Enter Groww API Key" />
+          </div>
+          <div class="setting-item">
+            <label>Secret Key</label>
+            <input type="password" [(ngModel)]="cfg.groww_secret_key" placeholder="Enter Groww Secret Key" />
+          </div>
+          <div class="setting-item">
+            <label>TOTP Secret</label>
+            <input type="password" [(ngModel)]="cfg.groww_totp_key" placeholder="Enter TOTP Secret" />
+          </div>
+        </div>
+        <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px;">
+          <button class="btn btn-sm btn-secondary" (click)="testGroww()">Test Groww Auth</button>
+          <span class="mono" style="font-size: 12px;">{{ testGrowwStatus() }}</span>
+        </div>
+      </div>
+
+
+      <!-- Gemini LLM -->
+      <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-weight: 600;">Google Gemini LLM (Qualitative Overlay)</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" [(ngModel)]="cfg.use_gemini" style="width: auto;" id="usegemini" />
+            <label for="usegemini" style="font-size: 13px; text-transform: none; cursor: pointer;">Enable Gemini AI Review</label>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Gemini API Key</label>
+            <input type="password" [(ngModel)]="cfg.gemini_api_key" placeholder="Enter Google AI API Key" />
+          </div>
+          <div class="setting-item">
+            <label>Model Name</label>
+            <input type="text" [(ngModel)]="cfg.gemini_model" />
+          </div>
+        </div>
+        <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px;">
+          <button class="btn btn-sm btn-secondary" (click)="testGemini()">Test Gemini API</button>
+          <span class="mono" style="font-size: 12px;">{{ testGeminiStatus() }}</span>
+        </div>
+      </div>
+
+      <!-- Telegram Bot -->
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-weight: 600;">Telegram Alert Bot</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" [(ngModel)]="cfg.use_telegram" style="width: auto;" id="usetelegram" />
+            <label for="usetelegram" style="font-size: 13px; text-transform: none; cursor: pointer;">Enable Telegram Alerts</label>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Bot Token</label>
+            <input type="password" [(ngModel)]="cfg.telegram_bot_token" placeholder="bot123456:ABC..." />
+          </div>
+          <div class="setting-item">
+            <label>Chat ID</label>
+            <input type="text" [(ngModel)]="cfg.telegram_chat_id" placeholder="-100123456789" />
+          </div>
+        </div>
+        <div style="margin-top: 10px; display: flex; align-items: center; gap: 12px;">
+          <button class="btn btn-sm btn-secondary" (click)="testTelegram()">Send Test Telegram Alert</button>
+          <span class="mono" style="font-size: 12px;">{{ testTelegramStatus() }}</span>
+        </div>
+      </div>
+    </div>
+  }
+</div>

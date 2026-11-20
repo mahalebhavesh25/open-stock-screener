@@ -1,0 +1,200 @@
+<div class="backtest-page">
+  @if (message()) {
+    <div class="action-toast" style="padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--color-blue); color: var(--color-blue); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+      <span>{{ message() }}</span>
+      <button class="btn btn-sm btn-secondary" (click)="message.set('')">Dismiss</button>
+    </div>
+  }
+
+  <!-- Controls Card -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Backtest & Walk-Forward Simulation Controls</span>
+      <span class="badge badge-neutral">Closed-Bar Event-Driven</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+      <div>
+        <label class="metric-label">Start Date</label>
+        <input type="date" [(ngModel)]="startDate" />
+      </div>
+      <div>
+        <label class="metric-label">End Date</label>
+        <input type="date" [(ngModel)]="endDate" />
+      </div>
+      <div>
+        <label class="metric-label">Initial Capital (₹)</label>
+        <input type="number" [(ngModel)]="initialCapital" />
+      </div>
+      <div>
+        <label class="metric-label">Strategy Focus</label>
+        <select [(ngModel)]="selectedStrategy">
+          <option value="ALL">All Strategies (Composite)</option>
+          <option value="BLEND_MOMENTUM_BREAKOUT">Blend: Pullback + Momentum Breakout</option>
+          <option value="TREND_PULLBACK">Trend Pullback Only</option>
+          <option value="VCP_BREAKOUT">VCP Breakout Only</option>
+          <option value="MEAN_REVERT">Mean Reversion Only</option>
+          <option value="DONCHIAN_55">Donchian 55-Day Only</option>
+        </select>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 18px;">
+        <input type="checkbox" [(ngModel)]="frictionModel" style="width: auto;" id="fric" />
+        <label for="fric" style="font-size: 13px;">Apply Small-Cap Frictions (STT, GST, Slippage)</label>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; margin-top: 18px;">
+      <button class="btn btn-primary" (click)="runSingleBacktest()" [disabled]="running()">
+        {{ running() ? 'Simulating...' : 'Run Single-Pass Backtest' }}
+      </button>
+      <button class="btn btn-secondary" (click)="runWalkForward()" [disabled]="running()">
+        {{ running() ? 'Evaluating...' : 'Run 6-Fold Purged Walk-Forward' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Live Simulation Logs Console -->
+  <div class="card" style="margin-top: 16px;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="card-title" style="margin-bottom: 0;">Simulation &amp; Backtest Live Logs</span>
+        @if (running()) {
+          <span class="badge badge-amber pulse">Simulating...</span>
+        }
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <span class="mono text-secondary" style="font-size: 11px;">{{ logs().length }} events</span>
+        <button class="btn btn-sm btn-secondary" (click)="logs.set([])">Clear</button>
+      </div>
+    </div>
+    <div class="log-console" style="max-height: 220px; overflow-y: auto; background: var(--bg-surface-2, #0d1117); padding: 12px; border-radius: 6px; font-family: monospace; font-size: 12px;">
+      @if (logs().length === 0) {
+        <div style="color: var(--text-secondary); text-align: center; padding: 16px;">
+          Ready. Real-time backtest, panel precomputation, and trade execution logs will appear here when simulation starts.
+        </div>
+      }
+      @for (l of logs(); track $index) {
+        <div style="padding: 3px 0; display: flex; gap: 8px; align-items: baseline; border-bottom: 1px solid rgba(255,255,255,0.04);">
+          <span style="color: #6e7681; font-size: 11px; flex-shrink: 0;">{{ l.timestamp }}</span>
+          <span [style.color]="l.level === 'ERROR' ? '#f85149' : (l.level === 'WARNING' ? '#d29922' : '#58a6ff')" style="font-weight: bold; font-size: 11px; flex-shrink: 0;">[{{ l.level }}]</span>
+          <span style="color: #8b949e; font-size: 11px; flex-shrink: 0;">[{{ l.source }}]</span>
+          <span style="color: #c9d1d9; word-break: break-word;">{{ l.message }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Single Pass Results Card -->
+  @if (results(); as res) {
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Simulation Performance Metrics</span>
+        <span class="badge badge-green">Backtest Complete</span>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="card">
+          <span class="metric-label">CAGR</span>
+          <div class="metric-val mono text-green">{{ res.cagr_pct ? (res.cagr_pct | number:'1.1-1') + '%' : 'N/A' }}</div>
+        </div>
+        <div class="card">
+          <span class="metric-label">Sharpe Ratio</span>
+          <div class="metric-val mono text-blue">{{ res.sharpe_ratio ? (res.sharpe_ratio | number:'1.2-2') : 'N/A' }}</div>
+        </div>
+        <div class="card">
+          <span class="metric-label">Sortino Ratio</span>
+          <div class="metric-val mono text-blue">{{ res.sortino_ratio ? (res.sortino_ratio | number:'1.2-2') : 'N/A' }}</div>
+        </div>
+        <div class="card">
+          <span class="metric-label">Max Drawdown</span>
+          <div class="metric-val mono text-red">{{ res.max_drawdown_pct ? (res.max_drawdown_pct | number:'1.1-1') + '%' : 'N/A' }}</div>
+        </div>
+        <div class="card">
+          <span class="metric-label">Win Rate</span>
+          <div class="metric-val mono">{{ res.win_rate_pct ? (res.win_rate_pct | number:'1.1-1') + '%' : 'N/A' }}</div>
+        </div>
+        <div class="card">
+          <span class="metric-label">Profit Factor</span>
+          <div class="metric-val mono">{{ res.profit_factor ? (res.profit_factor | number:'1.2-2') : 'N/A' }}</div>
+        </div>
+        <div class="card">
+          <span class="metric-label">Total Trades</span>
+          <div class="metric-val mono">{{ res.total_trades || 0 }}</div>
+        </div>
+      </div>
+
+      @if (res.strategy_breakdown && getKeys(res.strategy_breakdown).length > 0) {
+        <div style="margin-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px;">
+          <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 10px;">
+            Strategy Attribution Breakdown
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            @for (strat of getKeys(res.strategy_breakdown); track strat) {
+              <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm, 6px); padding: 10px 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <span class="badge" [ngClass]="strat.includes('PULLBACK') ? 'badge-blue' : (strat.includes('VCP') || strat.includes('MOMENTUM') ? 'badge-green' : 'badge-neutral')">{{ strat }}</span>
+                  <span class="mono bold text-secondary" style="font-size: 12px;">{{ res.strategy_breakdown[strat].trades }} trades</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px;">
+                  <span class="text-secondary">Win Rate:</span>
+                  <span class="mono bold">{{ res.strategy_breakdown[strat].win_rate_pct | number:'1.1-1' }}%</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 2px;">
+                  <span class="text-secondary">Net PnL:</span>
+                  <span class="mono bold" [ngClass]="res.strategy_breakdown[strat].net_pnl >= 0 ? 'text-green' : 'text-red'">
+                    ₹{{ res.strategy_breakdown[strat].net_pnl | number:'1.0-0' }}
+                  </span>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 2px;">
+                  <span class="text-secondary">Profit Factor:</span>
+                  <span class="mono bold">{{ res.strategy_breakdown[strat].profit_factor | number:'1.2-2' }}</span>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Walk-Forward Results Card -->
+  @if (walkForwardResults(); as wf) {
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">6-Fold Purged Walk-Forward Cross-Validation</span>
+        <span class="badge badge-blue">Walk-Forward</span>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Fold</th>
+              <th>Train Window</th>
+              <th>Test Window</th>
+              <th>In-Sample Sharpe</th>
+              <th>Out-of-Sample Sharpe</th>
+              <th>Sharpe Delta</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (f of wf.folds || []; track f.fold) {
+              <tr>
+                <td class="bold mono">Fold #{{ f.fold }}</td>
+                <td class="mono text-secondary">{{ f.train_start }} → {{ f.train_end }}</td>
+                <td class="mono text-secondary">{{ f.test_start }} → {{ f.test_end }}</td>
+                <td class="mono bold text-blue">{{ f.in_sample_sharpe | number:'1.2-2' }}</td>
+                <td class="mono bold" [ngClass]="f.out_of_sample_sharpe > 0 ? 'text-green' : 'text-red'">
+                  {{ f.out_of_sample_sharpe | number:'1.2-2' }}
+                </td>
+                <td class="mono" [ngClass]="(f.out_of_sample_sharpe - f.in_sample_sharpe) >= 0 ? 'text-green' : 'text-amber'">
+                  {{ (f.out_of_sample_sharpe - f.in_sample_sharpe) | number:'1.2-2' }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+</div>

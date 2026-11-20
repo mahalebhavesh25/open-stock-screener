@@ -1,0 +1,277 @@
+<div class="screener-page">
+  @if (feedbackMsg()) {
+    <div class="action-toast" style="padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--color-blue); color: var(--color-blue); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+      <span>{{ feedbackMsg() }}</span>
+      <button class="btn btn-sm btn-secondary" (click)="feedbackMsg.set('')">Dismiss</button>
+    </div>
+  }
+
+  <!-- Filter & Actions Bar -->
+  <div class="filter-bar">
+    <div class="filter-group" style="flex: 1; min-width: 200px;">
+      <span class="filter-label">Search:</span>
+      <input type="text" [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" placeholder="Filter by symbol..." style="max-width: 200px;" />
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">Strategy:</span>
+      <select [ngModel]="filterStrategy()" (ngModelChange)="filterStrategy.set($event)" style="width: auto;">
+        <option value="ALL">All Strategies</option>
+        <option value="BLEND_MOMENTUM_BREAKOUT">Blend: Pullback + Momentum Breakout</option>
+        <option value="TREND_PULLBACK">Trend Pullback</option>
+        <option value="VCP_BREAKOUT">VCP Breakout</option>
+        <option value="MEAN_REVERT">Mean Reversion</option>
+        <option value="DONCHIAN_55">Donchian 55-Day</option>
+        <option value="MOMENTUM_52W">52-Week High</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <span class="filter-label">Min Score:</span>
+      <input type="number" [ngModel]="filterMinScore()" (ngModelChange)="filterMinScore.set($event)" min="0" max="100" style="width: 70px;" />
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-left: auto;">
+      <button class="btn btn-primary" (click)="runScan()" [disabled]="scanning()">
+        {{ scanning() ? 'Scanning...' : 'Trigger Screener Run' }}
+      </button>
+      <button class="btn btn-secondary" (click)="loadLatest()" [disabled]="loading()">
+        {{ loading() ? 'Refreshing...' : 'Refresh List' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Live Screener Stage Progress Box (When Scan is Active) -->
+  @if (activeTask(); as task) {
+    @if (task.status === 'RUNNING' || task.status === 'IDLE' || task.status === 'PAUSED') {
+      <div class="card" style="border-left: 3px solid var(--color-blue); background: linear-gradient(90deg, #101722, #161f2e);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="task-pulse-dot"></span>
+            <span class="bold" style="color: var(--text-primary);">Screener Scan Pipeline Active</span>
+            <span class="mono text-secondary" style="font-size: 11px;">#{{ task.task_id || task.id }}</span>
+            <span class="badge badge-amber mono bold">{{ task.stage || 'Scanning in progress...' }}</span>
+            @if (task.current_item) {
+              <span class="ticker-pill mono">{{ task.current_item }}</span>
+            }
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="mono text-blue bold" style="font-size: 13px;">{{ task.progress_pct | number:'1.1-1' }}% overall</span>
+            <a routerLink="/tasks" class="btn btn-sm btn-secondary">Tasks & Live Logs &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Stage Stepper -->
+        <div class="stage-pipeline" style="margin: 6px 0;">
+          @for (st of getStagesList(); track st.id) {
+            <div class="stage-step" [ngClass]="st.status">
+              <span class="stage-step-num">{{ st.id }}</span>
+              <span class="stage-step-label">{{ st.label }}</span>
+              @if (st.status === 'completed') {
+                <span class="stage-icon-done">✓</span>
+              }
+              @if (st.status === 'active') {
+                <span class="stage-pulse-dot"></span>
+              }
+            </div>
+            @if (!$last) {
+              <span class="stage-separator" [class.active]="st.status === 'completed'">&rarr;</span>
+            }
+          }
+        </div>
+
+        <!-- Progress Track & Message -->
+        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px;">
+          <span class="text-secondary">{{ task.message || task.current_step }}</span>
+          @if (task.stage_progress_pct !== undefined) {
+            <span class="mono text-secondary">Stage Progress: {{ task.completed_steps || task.completed_items || 0 }}/{{ task.total_steps || task.total_items || 0 }} ({{ task.stage_progress_pct | number:'1.0-0' }}%)</span>
+          }
+        </div>
+        <div class="progress-track" style="margin-top: 4px;">
+          <div class="progress-bar" [style.width.%]="task.progress_pct"></div>
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Candidates Table -->
+  <div class="card">
+    <div class="card-header">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="card-title">Screened Candidates</span>
+        <span class="badge badge-neutral">{{ filteredCandidates().length }} found</span>
+      </div>
+      <span class="text-secondary" style="font-size: 12px;">Ranked by Multi-factor Quality Score (0-100)</span>
+    </div>
+
+    @if (loading()) {
+      <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+        Loading candidates...
+      </div>
+    } @else if (filteredCandidates().length === 0) {
+      <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+        No candidates match current criteria. Click "Trigger Screener Run" to scan the universe.
+      </div>
+    } @else {
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Strategy</th>
+              <th>Score</th>
+              <th>Entry Price</th>
+              <th>Stop Loss</th>
+              <th>Target 1 (1.5R)</th>
+              <th>Target 2 (3.0R)</th>
+              <th>Risk:Reward</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (c of filteredCandidates(); track c.signal_id || c.symbol) {
+              <tr>
+                <td class="bold mono">{{ c.symbol }}</td>
+                <td>
+                  <span class="badge" [ngClass]="{
+                    'badge-green': c.strategy === 'VCP_BREAKOUT',
+                    'badge-blue': c.strategy === 'TREND_PULLBACK',
+                    'badge-purple': c.strategy === 'MEAN_REVERT',
+                    'badge-amber': c.strategy === 'DONCHIAN_55'
+                  }">
+                    {{ c.strategy }}
+                  </span>
+                </td>
+                <td class="mono bold" [ngClass]="c.score >= 70 ? 'text-green' : (c.score >= 55 ? 'text-blue' : 'text-amber')">
+                  {{ c.score | number:'1.1-1' }}
+                </td>
+                <td class="mono">₹{{ (c.entry_price || c.entry_trigger) | number:'1.2-2' }}</td>
+                <td class="mono text-red">₹{{ (c.stop_loss || c.stop) | number:'1.2-2' }}</td>
+                <td class="mono text-green">₹{{ (c.target_1 || c.t1) | number:'1.2-2' }}</td>
+                <td class="mono text-green">₹{{ (c.target_2 || c.t2) | number:'1.2-2' }}</td>
+                <td class="mono bold text-blue">1:{{ c.reward_risk_ratio ? (c.reward_risk_ratio | number:'1.1-1') : '2.0' }}</td>
+                <td style="display: flex; gap: 6px;">
+                  <button class="btn btn-sm btn-secondary" (click)="inspectCandidate(c)">Inspect</button>
+                  @if (c.signal_id || c.id) {
+                    <button class="btn btn-sm btn-primary" (click)="approve(c)">Approve</button>
+                    <button class="btn btn-sm btn-danger" (click)="reject(c)">Reject</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+
+  <!-- Candidate Deep Inspection Modal -->
+  @if (modalOpen() && selectedCandidate(); as sc) {
+    <div class="modal-backdrop" (click)="closeModal()">
+      <div class="modal-content" (click)="$event.stopPropagation()">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <h2 class="mono bold" style="font-size: 20px;">{{ sc.symbol }}</h2>
+            <span class="badge badge-blue">{{ sc.strategy }}</span>
+            <span class="badge badge-green">Score: {{ sc.score | number:'1.1-1' }}</span>
+          </div>
+          <button class="btn btn-sm btn-secondary" (click)="closeModal()">Close [X]</button>
+        </div>
+
+        <!-- Trade Setup Parameters -->
+        <div style="background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
+          <div style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; margin-bottom: 8px;">Planned Order Parameters</div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+            <div>
+              <span style="font-size: 11px; color: var(--text-secondary);">Entry Trigger</span>
+              <div class="mono bold">₹{{ (sc.entry_price || sc.entry_trigger) | number:'1.2-2' }}</div>
+            </div>
+            <div>
+              <span style="font-size: 11px; color: var(--text-secondary);">Stop Loss (ATR/Hard)</span>
+              <div class="mono bold text-red">₹{{ (sc.stop_loss || sc.stop) | number:'1.2-2' }}</div>
+            </div>
+            <div>
+              <span style="font-size: 11px; color: var(--text-secondary);">Target 1 (1.5R - 50%)</span>
+              <div class="mono bold text-green">₹{{ (sc.target_1 || sc.t1) | number:'1.2-2' }}</div>
+            </div>
+            <div>
+              <span style="font-size: 11px; color: var(--text-secondary);">Target 2 (3.0R - 50%)</span>
+              <div class="mono bold text-green">₹{{ (sc.target_2 || sc.t2) | number:'1.2-2' }}</div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Technical & Factor Drawer -->
+        <div>
+          <div style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Technical & Cross-Sectional Factors</div>
+          <div class="factors-grid">
+            <div class="factor-card">
+              <span class="factor-name">RSI (14)</span>
+              <span class="factor-val" [ngClass]="(sc.rsi_14 ?? sc.features?.rsi14) > 70 ? 'text-amber' : 'text-blue'">
+                {{ (sc.rsi_14 ?? sc.features?.rsi14) != null ? ((sc.rsi_14 ?? sc.features?.rsi14) | number:'1.1-1') : 'N/A' }}
+              </span>
+            </div>
+            <div class="factor-card">
+              <span class="factor-name">ADX (14)</span>
+              <span class="factor-val">
+                {{ (sc.adx_14 ?? sc.features?.adx) != null ? ((sc.adx_14 ?? sc.features?.adx) | number:'1.1-1') : 'N/A' }}
+              </span>
+            </div>
+            <div class="factor-card">
+              <span class="factor-name">ATR %</span>
+              <span class="factor-val">
+                {{ (sc.atr_14_pct ?? sc.features?.atr_pct) != null ? ((sc.atr_14_pct ?? sc.features?.atr_pct) | number:'1.2-2') + '%' : 'N/A' }}
+              </span>
+            </div>
+            <div class="factor-card">
+              <span class="factor-name">SMA 20</span>
+              <span class="factor-val">
+                {{ (sc.sma_20 ?? sc.features?.sma_20) != null ? '₹' + ((sc.sma_20 ?? sc.features?.sma_20) | number:'1.2-2') : 'N/A' }}
+              </span>
+            </div>
+            <div class="factor-card">
+              <span class="factor-name">SMA 50</span>
+              <span class="factor-val">
+                {{ (sc.sma_50 ?? sc.features?.sma_50) != null ? '₹' + ((sc.sma_50 ?? sc.features?.sma_50) | number:'1.2-2') : 'N/A' }}
+              </span>
+            </div>
+            <div class="factor-card">
+              <span class="factor-name">SMA 200</span>
+              <span class="factor-val">
+                {{ (sc.sma_200 ?? sc.features?.sma_200) != null ? '₹' + ((sc.sma_200 ?? sc.features?.sma_200) | number:'1.2-2') : 'N/A' }}
+              </span>
+            </div>
+            <div class="factor-card">
+              <span class="factor-name">Vol 20D Ratio</span>
+              <span class="factor-val" [ngClass]="(sc.volume_ratio_20 ?? sc.features?.vol_ratio) > 1.5 ? 'text-green' : 'text-primary'">
+                {{ (sc.volume_ratio_20 ?? sc.features?.vol_ratio) != null ? ((sc.volume_ratio_20 ?? sc.features?.vol_ratio) | number:'1.2-2') + 'x' : 'N/A' }}
+              </span>
+            </div>
+            <div class="factor-card">
+              <span class="factor-name">Distance to 52W High</span>
+              <span class="factor-val">
+                {{ (sc.dist_52w_high_pct ?? sc.features?.dist_52w_high) != null ? ((sc.dist_52w_high_pct ?? sc.features?.dist_52w_high) | number:'1.1-1') + '%' : 'N/A' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        @if (sc.llm_sanity_notes) {
+          <div style="margin-top: 16px; padding: 12px; background: rgba(88, 166, 255, 0.08); border: 1px solid var(--color-blue); border-radius: var(--radius-sm);">
+            <div style="font-size: 11px; color: var(--color-blue); text-transform: uppercase; font-weight: 600;">LLM Qualitative Sanity Check</div>
+            <div style="margin-top: 4px; font-size: 13px;">{{ sc.llm_sanity_notes }}</div>
+          </div>
+        }
+
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+          <button class="btn btn-secondary" (click)="closeModal()">Close</button>
+          @if (sc.signal_id) {
+            <button class="btn btn-danger" (click)="reject(sc); closeModal()">Reject Setup</button>
+            <button class="btn btn-primary" (click)="approve(sc); closeModal()">Approve Trade</button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

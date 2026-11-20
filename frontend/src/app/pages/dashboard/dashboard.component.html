@@ -1,0 +1,260 @@
+<div class="dashboard-container">
+  <!-- Action notification message -->
+  @if (actionMessage()) {
+    <div class="action-toast">
+      <span>{{ actionMessage() }}</span>
+      <button class="btn btn-sm btn-secondary" (click)="actionMessage.set('')">Dismiss</button>
+    </div>
+  }
+
+  <!-- Macro Regime Banner -->
+  @if (overview(); as data) {
+    <div class="regime-banner">
+      <div class="regime-left">
+        <div>
+          <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Current Regime Dial</div>
+          <span class="badge regime-status-chip"
+            [ngClass]="{
+              'badge-green': data.regime.status === 'RISK_ON',
+              'badge-amber': data.regime.status === 'NEUTRAL',
+              'badge-red': data.regime.status === 'RISK_OFF'
+            }">
+            {{ data.regime.status }}
+          </span>
+        </div>
+        <div class="regime-metrics">
+          <div class="regime-metric-item">
+            <span>Exposure Multiplier</span>
+            <span class="mono bold text-blue">{{ data.regime.exposure_multiplier }}x</span>
+          </div>
+          <div class="regime-metric-item">
+            <span>{{ data.regime.benchmark_symbol }}</span>
+            <span class="mono bold">{{ data.regime.benchmark_close | number:'1.2-2' }}</span>
+          </div>
+          <div class="regime-metric-item">
+            <span>Above 200 DMA</span>
+            <span class="bold" [ngClass]="data.regime.above_200_dma ? 'text-green' : 'text-red'">
+              {{ data.regime.above_200_dma ? 'YES' : 'NO' }}
+            </span>
+          </div>
+          <div class="regime-metric-item">
+            <span>Breadth (> 50 DMA)</span>
+            <span class="mono bold" [ngClass]="data.regime.breadth_above_50_dma ? 'text-green' : 'text-amber'">
+              {{ data.regime.breadth_pct | number:'1.1-1' }}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="quick-actions-bar">
+        <button class="btn btn-primary" (click)="triggerScreener()">Run Screener</button>
+        <button class="btn btn-secondary" (click)="triggerPreflight()">Preflight</button>
+        <button class="btn btn-secondary" (click)="refresh()">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Active Operations Live Synchronization -->
+    @if (activeTasks().length > 0) {
+      <div class="card" style="border-color: var(--color-blue); background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(30, 41, 59, 0.95));">
+        <div class="card-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="task-pulse-dot"></span>
+            <span class="card-title text-blue">Active Background Operations in Progress</span>
+            <span class="badge badge-blue">{{ activeTasks().length }} Running</span>
+          </div>
+          <a [routerLink]="['/tasks']" class="btn btn-sm btn-secondary">Open Task Queue &amp; Logs &rarr;</a>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          @for (task of activeTasks(); track task.task_id) {
+            <div>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+                <div>
+                  <span class="badge badge-blue" style="margin-right: 8px;">{{ task.task_type }}</span>
+                  <span class="bold">{{ task.current_step || task.message }}</span>
+                </div>
+                <span class="mono bold text-blue">{{ task.progress_pct | number:'1.1-1' }}% ({{ task.completed_steps }}/{{ task.total_steps }})</span>
+              </div>
+              <div class="progress-track" style="margin-top: 6px;">
+                <div class="progress-bar" [style.width.%]="task.progress_pct"></div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Metrics Grid -->
+    <div class="metrics-grid">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Capital Overview</span>
+          <span class="badge badge-neutral">INR</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Total Capital</span>
+            <span class="mono bold">₹{{ data.portfolio.initial_capital | number:'1.0-0' }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Capital Deployed</span>
+            <span class="mono bold text-blue">₹{{ data.portfolio.capital_deployed | number:'1.0-0' }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Cash Available</span>
+            <span class="mono bold text-green">₹{{ (data.portfolio.initial_capital - data.portfolio.capital_deployed) | number:'1.0-0' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Trading Performance</span>
+          <span class="badge" [ngClass]="data.portfolio.realized_pnl >= 0 ? 'badge-green' : 'badge-red'">
+            {{ data.portfolio.realized_pnl >= 0 ? '+PROFIT' : 'LOSS' }}
+          </span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Realized PnL</span>
+            <span class="mono bold" [ngClass]="data.portfolio.realized_pnl >= 0 ? 'text-green' : 'text-red'">
+              ₹{{ data.portfolio.realized_pnl | number:'1.2-2' }}
+            </span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Open Positions</span>
+            <span class="mono bold">{{ data.portfolio.open_positions_count }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Completed Trades</span>
+            <span class="mono bold">{{ data.portfolio.total_trades_count }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Database & Engine Stats</span>
+          <span class="badge badge-neutral">SQLite WAL</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Tracked Instruments</span>
+            <span class="mono bold">{{ data.database.instruments }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Cached Candles</span>
+            <span class="mono bold text-amber">{{ data.database.candles | number }}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span class="text-secondary">Generated Signals</span>
+            <span class="mono bold">{{ data.database.signals }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Proposed Trades Pending Approval -->
+    <div class="card">
+      <div class="card-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="card-title">Proposed Trades (Pending Approval)</span>
+          <span class="badge badge-amber">{{ pendingSignals().length }}</span>
+        </div>
+        <a [routerLink]="['/screener']" class="btn btn-sm btn-secondary">Open Screener</a>
+      </div>
+
+      @if (pendingSignals().length === 0) {
+        <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+          No pending trade proposals. Run screener to find fresh setups.
+        </div>
+      } @else {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Strategy</th>
+                <th>Score</th>
+                <th>Entry</th>
+                <th>Stop Loss</th>
+                <th>Target 1</th>
+                <th>Target 2</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (trade of pendingSignals(); track trade.trade_id || trade.symbol) {
+                <tr>
+                  <td class="bold mono">{{ trade.symbol }}</td>
+                  <td><span class="badge badge-blue">{{ trade.strategy }}</span></td>
+                  <td class="mono bold text-green">{{ trade.score | number:'1.1-1' }}</td>
+                  <td class="mono">₹{{ trade.entry_price | number:'1.2-2' }}</td>
+                  <td class="mono text-red">₹{{ trade.stop_loss | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ trade.target_1 | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ trade.target_2 | number:'1.2-2' }}</td>
+                  <td style="display: flex; gap: 6px;">
+                    <button class="btn btn-sm btn-primary" (click)="approveTrade(trade)">Approve</button>
+                    <button class="btn btn-sm btn-danger" (click)="rejectTrade(trade)">Reject</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+
+    <!-- Open Active Positions -->
+    <div class="card">
+      <div class="card-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="card-title">Active Positions</span>
+          <span class="badge badge-green">{{ openTrades().length }}</span>
+        </div>
+        <a [routerLink]="['/trades']" class="btn btn-sm btn-secondary">Trade Execution Desk</a>
+      </div>
+
+      @if (openTrades().length === 0) {
+        <div style="padding: 20px; text-align: center; color: var(--text-secondary);">
+          No currently active open positions.
+        </div>
+      } @else {
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Strategy</th>
+                <th>Qty</th>
+                <th>Avg Entry</th>
+                <th>Stop Loss</th>
+                <th>Target 1</th>
+                <th>Target 2</th>
+                <th>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (trade of openTrades(); track trade.trade_id) {
+                <tr>
+                  <td class="bold mono">{{ trade.symbol }}</td>
+                  <td><span class="badge badge-blue">{{ trade.strategy }}</span></td>
+                  <td class="mono">{{ trade.open_qty }}</td>
+                  <td class="mono">₹{{ trade.avg_entry | number:'1.2-2' }}</td>
+                  <td class="mono text-red">₹{{ trade.stop_loss | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ trade.target_1 | number:'1.2-2' }}</td>
+                  <td class="mono text-green">₹{{ trade.target_2 | number:'1.2-2' }}</td>
+                  <td><span class="badge badge-green">{{ trade.state }}</span></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  } @else {
+    <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+      Connecting to Antigravity Engine Backend...
+    </div>
+  }
+</div>
