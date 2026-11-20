@@ -1,0 +1,120 @@
+<div class="app-shell">
+  <!-- Top Navigation & Status Bar -->
+  <header class="top-nav">
+    <div class="brand-section">
+      <div class="brand-logo">
+        ANTIGRAVITY <span>//</span> SMLCAP-SWING-v2
+      </div>
+
+      <nav class="nav-links">
+        <a routerLink="/dashboard" routerLinkActive="active" class="nav-item">Dashboard</a>
+        <a routerLink="/screener" routerLinkActive="active" class="nav-item">Screener</a>
+        <a routerLink="/trades" routerLinkActive="active" class="nav-item">Execution Desk</a>
+        <a routerLink="/universe" routerLinkActive="active" class="nav-item">Universe & Data</a>
+        <a routerLink="/backtest" routerLinkActive="active" class="nav-item">Backtest Lab</a>
+        <a routerLink="/tasks" routerLinkActive="active" class="nav-item">Tasks & Logs</a>
+        <a routerLink="/settings" routerLinkActive="active" class="nav-item">Settings</a>
+      </nav>
+    </div>
+
+    <div class="status-bar">
+      <!-- Market Time IST -->
+      @if (overview(); as data) {
+        <div class="status-item">
+          <span class="text-secondary mono">{{ data.market.time_ist }} IST</span>
+        </div>
+
+        <!-- Market Status Badge -->
+        <div class="status-item">
+          <span class="badge" [ngClass]="{
+            'badge-green': data.market.is_open,
+            'badge-red': data.market.is_holiday,
+            'badge-amber': !data.market.is_open && !data.market.is_holiday
+          }">
+            {{ data.market.is_open ? 'MARKET OPEN' : (data.market.is_holiday ? 'HOLIDAY' : 'MARKET CLOSED') }}
+          </span>
+        </div>
+
+        <!-- Regime Badge -->
+        <div class="status-item">
+          <span class="badge" [ngClass]="{
+            'badge-green': data.regime.status === 'RISK_ON',
+            'badge-amber': data.regime.status === 'NEUTRAL',
+            'badge-red': data.regime.status === 'RISK_OFF'
+          }">
+            {{ data.regime.status }}
+          </span>
+        </div>
+
+        <!-- Run Mode Badge -->
+        <div class="status-item">
+          <span class="badge" [ngClass]="{
+            'badge-green': data.run_mode === 'LIVE',
+            'badge-blue': data.run_mode === 'RESEARCH',
+            'badge-amber': data.run_mode === 'SMOKE'
+          }">
+            {{ data.run_mode || 'LIVE' }}
+          </span>
+        </div>
+
+        <!-- Broker Adapter Badge -->
+        <div class="status-item">
+          <span class="badge badge-blue">
+            {{ data.execution_mode }}
+          </span>
+        </div>
+
+        <!-- Dry Run Badge -->
+        <div class="status-item">
+          <span class="badge" [ngClass]="data.dry_run ? 'badge-amber' : 'badge-red'">
+            {{ data.dry_run ? 'DRY-RUN' : 'LIVE-ORDERS' }}
+          </span>
+        </div>
+      }
+
+      <!-- Backend Connection Status -->
+      <div class="status-item">
+        <span class="badge" [ngClass]="apiOnline() ? 'badge-green' : 'badge-red'">
+          {{ apiOnline() ? 'API ONLINE' : 'API OFFLINE' }}
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Real-Time Activity & Progress Synchronization Banner -->
+  @if (activeTasks().length > 0) {
+    <div class="active-tasks-banner">
+      @for (task of activeTasks(); track task.task_id) {
+        <div class="active-task-item">
+          <div class="task-info">
+            <span class="task-pulse-dot"></span>
+            <span class="badge badge-blue mono bold">{{ task.task_type }}</span>
+            @if (task.stage) {
+              <span class="badge badge-amber mono bold">{{ task.stage }}</span>
+            }
+            @if (task.current_item) {
+              <span class="ticker-pill mono">{{ task.current_item }}</span>
+            }
+            <span class="task-msg bold">{{ task.message || task.current_step || 'Processing in progress...' }}</span>
+            <span class="mono text-blue bold">({{ task.progress_pct | number:'1.1-1' }}% overall)</span>
+            @if (task.stage_progress_pct !== undefined) {
+              <span class="mono text-secondary" style="font-size: 11px;">[Stage: {{ task.stage_progress_pct | number:'1.0-0' }}%]</span>
+            }
+          </div>
+          <div class="task-right">
+            <div class="mini-progress-track">
+              <div class="mini-progress-bar" [style.width.%]="task.progress_pct"></div>
+            </div>
+            <a routerLink="/tasks" class="btn btn-sm btn-secondary">Tasks & Logs &rarr;</a>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Main Viewport Content -->
+  <main class="main-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>
+
