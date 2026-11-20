@@ -1,0 +1,50 @@
+# Environment variables & secrets (Never commit these!)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Dependency directories
+node_modules/
+vendor/
+venv/
+.venv/
+test_venv/
+*venv*/
+.pytest_cache/
+.angular/
+
+# Build & compiled output
+dist/
+build/
+out/
+*.exe
+*.dll
+*.so
+*.dylib
+*.class
+*.pyc
+__pycache__/
+
+# Logs & databases
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.sqlite
+*.db
+backend/data/cache/
+backend/data/reports/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
