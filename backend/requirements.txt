@@ -1,0 +1,15 @@
+fastapi>=0.110.0,<1.0.0
+uvicorn>=0.28.0,<1.0.0
+pydantic>=2.6.0,<3.0.0
+pandas>=2.1.0,<3.0.0
+numpy>=1.26.0,<3.0.0
+scipy>=1.11.0,<2.0.0
+scikit-learn>=1.4.0,<2.0.0
+requests>=2.31.0,<3.0.0
+python-dotenv>=1.0.0,<2.0.0
+yfinance>=0.2.35
+pyotp>=2.9.0
+growwapi>=0.1.0
+google-genai>=0.1.1
+pyarrow>=14.0.0
+python-multipart>=0.0.9
